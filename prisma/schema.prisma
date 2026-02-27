@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = env("DATABASE_PROVIDER")
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  SELLER
+  INVESTOR
+}
+
+enum InstrumentType {
+  OOO_SHARE
+  AO_SHARES
+}
+
+enum ListingStatus {
+  DRAFT
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum OfferStatus {
+  SENT
+  WITHDRAWN
+  ACCEPTED
+  REJECTED
+}
+
+enum DealStatus {
+  LOI
+  DOCS
+  PREEMPTIVE_RIGHT
+  NOTARY_OR_REGISTRAR
+  ESCROW_PAYMENT
+  CLOSED
+  CANCELLED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String
+  email         String         @unique
+  passwordHash  String
+  role          Role
+  createdAt     DateTime       @default(now())
+  verification  Verification?
+  listings      Listing[]      @relation("SellerListings")
+  offers        Offer[]        @relation("InvestorOffers")
+  uploadedFiles DataRoomFile[] @relation("UploadedFiles")
+  sentMessages  Message[]      @relation("SenderMessages")
+  sellerDeals   Deal[]         @relation("SellerDeals")
+  investorDeals Deal[]         @relation("InvestorDeals")
+  ndaAccepts    NdaAcceptance[]
+  auditLogs     AuditLog[]
+}
+
+model Company {
+  id                 String    @id @default(cuid())
+  name               String
+  industry           String
+  location           String
+  description        String
+  isAnonymousAllowed Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  listings           Listing[]
+}
+
+model Listing {
+  id             String         @id @default(cuid())
+  companyId      String
+  sellerId       String
+  instrumentType InstrumentType
+  percent        Float
+  priceMin       Float
+  priceMax       Float
+  shortTeaser    String
+  status         ListingStatus  @default(DRAFT)
+  createdAt      DateTime       @default(now())
+  company        Company        @relation(fields: [companyId], references: [id])
+  seller         User           @relation("SellerListings", fields: [sellerId], references: [id])
+  ndaAcceptances NdaAcceptance[]
+  files          DataRoomFile[]
+  offers         Offer[]
+  deals          Deal[]
+}
+
+model Verification {
+  id            String             @id @default(cuid())
+  userId        String             @unique
+  status        VerificationStatus @default(UNVERIFIED)
+  documentsNote String?
+  createdAt     DateTime           @default(now())
+  user          User               @relation(fields: [userId], references: [id])
+}
+
+model NdaAcceptance {
+  id        String   @id @default(cuid())
+  userId    String
+  listingId String
+  acceptedAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  listing   Listing  @relation(fields: [listingId], references: [id])
+
+  @@unique([userId, listingId])
+}
+
+model DataRoomFile {
+  id         String   @id @default(cuid())
+  listingId  String
+  uploaderId String
+  filename   String
+  path       String
+  mimeType   String
+  size       Int
+  createdAt  DateTime @default(now())
+  listing    Listing  @relation(fields: [listingId], references: [id])
+  uploader   User     @relation("UploadedFiles", fields: [uploaderId], references: [id])
+}
+
+model Offer {
+  id         String      @id @default(cuid())
+  listingId  String
+  investorId String
+  amount     Float
+  message    String
+  status     OfferStatus @default(SENT)
+  createdAt  DateTime    @default(now())
+  listing    Listing     @relation(fields: [listingId], references: [id])
+  investor   User        @relation("InvestorOffers", fields: [investorId], references: [id])
+  deal       Deal?
+}
+
+model Deal {
+  id         String     @id @default(cuid())
+  listingId  String
+  sellerId   String
+  investorId String
+  offerId    String     @unique
+  status     DealStatus @default(LOI)
+  createdAt  DateTime   @default(now())
+  listing    Listing    @relation(fields: [listingId], references: [id])
+  seller     User       @relation("SellerDeals", fields: [sellerId], references: [id])
+  investor   User       @relation("InvestorDeals", fields: [investorId], references: [id])
+  offer      Offer      @relation(fields: [offerId], references: [id])
+  messages   Message[]
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  dealId    String
+  senderId  String
+  text      String
+  createdAt DateTime @default(now())
+  deal      Deal     @relation(fields: [dealId], references: [id])
+  sender    User     @relation("SenderMessages", fields: [senderId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String
+  metaJson   String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+}
